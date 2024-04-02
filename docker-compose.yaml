@@ -1,0 +1,60 @@
+version: "3.8"
+
+networks:
+  proxy:
+
+services:
+  postgres:
+    image: "postgres:latest"
+    hostname: postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=postgres
+    healthcheck:
+      test: /usr/bin/pg_isready -U postgres
+      interval: 5s
+      timeout: 10s
+      retries: 120
+    volumes:
+      - postgres-volume:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: "rabbitmq"
+    ports:
+      - 5672:5672
+      - 15672:15672
+    volumes:
+      - ~/.docker-conf/rabbitmq/data/:/var/lib/rabbitmq/
+      - ~/.docker-conf/rabbitmq/log/:/var/log/rabbitmq
+    networks:
+      - proxy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:15672"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    networks:
+      - proxy
+    ports:
+      - 8080:8080
+    depends_on:
+      - rabbitmq
+      - postgres
+    links:
+      - rabbitmq
+      - postgres
+    restart: always
+
+volumes:
+  postgres-volume:
+    driver: local
